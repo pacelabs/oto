@@ -89,6 +89,7 @@ type Service struct {
 type Method struct {
 	Name           string    `json:"name"`
 	NameLowerCamel string    `json:"nameLowerCamel"`
+	NameLowerSnake string    `json:"nameLowerSnake"`
 	InputObject    FieldType `json:"inputObject"`
 	OutputObject   FieldType `json:"outputObject"`
 	Comment        string    `json:"comment"`
@@ -107,12 +108,14 @@ type Object struct {
 	// Metadata are typed key/value pairs extracted from the
 	// comments.
 	Metadata map[string]interface{} `json:"metadata"`
+	Example  interface{}            `json:"example"`
 }
 
 // Field describes the field inside an Object.
 type Field struct {
 	Name           string              `json:"name"`
 	NameLowerCamel string              `json:"nameLowerCamel"`
+	NameLowerSnake string              `json:"nameLowerSnake"`
 	Type           FieldType           `json:"type"`
 	OmitEmpty      bool                `json:"omitEmpty"`
 	Comment        string              `json:"comment"`
@@ -140,6 +143,7 @@ type FieldType struct {
 	TypeName             string `json:"typeName"`
 	ObjectName           string `json:"objectName"`
 	ObjectNameLowerCamel string `json:"objectNameLowerCamel"`
+	ObjectNameLowerSnake string `json:"objectNameLowerSnake"`
 	Multiple             bool   `json:"multiple"`
 	Package              string `json:"package"`
 	IsObject             bool   `json:"isObject"`
@@ -268,6 +272,7 @@ func (p *Parser) parseMethod(pkg *packages.Package, serviceName string, methodTy
 	var m Method
 	m.Name = methodType.Name()
 	m.NameLowerCamel = camelizeDown(m.Name)
+	m.NameLowerSnake = snakeDown(m.Name)
 	m.Comment = p.commentForMethod(serviceName, m.Name)
 	var err error
 	m.Metadata, m.Comment, err = p.extractCommentMetadata(m.Comment)
@@ -331,6 +336,9 @@ func (p *Parser) parseObject(pkg *packages.Package, o types.Object, v *types.Str
 		}
 		obj.Fields = append(obj.Fields, field)
 	}
+	if err := p.SetExample(pkg, &obj); err != nil {
+		return err
+	}
 	p.def.Objects = append(p.def.Objects, obj)
 	p.objects[obj.Name] = struct{}{}
 	return nil
@@ -355,6 +363,7 @@ func (p *Parser) parseField(pkg *packages.Package, objectName string, v *types.V
 	var f Field
 	f.Name = v.Name()
 	f.NameLowerCamel = camelizeDown(f.Name)
+	f.NameLowerSnake = snakeDown(f.Name)
 	f.Comment = p.commentForField(objectName, f.Name)
 	f.Metadata = map[string]interface{}{}
 	if !v.Exported() {
@@ -406,6 +415,7 @@ func (p *Parser) parseFieldType(pkg *packages.Package, obj types.Object) (FieldT
 	ftype.TypeName = types.TypeString(typ, resolver)
 	ftype.ObjectName = types.TypeString(typ, func(other *types.Package) string { return "" })
 	ftype.ObjectNameLowerCamel = camelizeDown(ftype.ObjectName)
+	ftype.ObjectNameLowerSnake = snakeDown(ftype.ObjectName)
 	ftype.TypeID = pkgPath + "." + ftype.ObjectName
 	if ftype.IsObject {
 		ftype.JSType = "object"
@@ -442,6 +452,7 @@ func (p *Parser) addOutputFields() error {
 		OmitEmpty:      true,
 		Name:           "Error",
 		NameLowerCamel: "error",
+		NameLowerSnake: "error",
 		Comment:        "Error is string explaining what went wrong. Empty if everything was fine.",
 		Type: FieldType{
 			TypeName:  "string",
@@ -596,4 +607,110 @@ func (p *Parser) extractCommentMetadata(comment string) (map[string]interface{},
 		lines = append(lines, line)
 	}
 	return metadata, strings.Join(lines, "\n"), nil
+}
+
+// SetExample sets an object-example for the specified object
+func (p *Parser) SetExample(pkg *packages.Package, o *Object) error {
+	// example is the json-string
+	// that will be parsed to *Object.Example
+	example := "{"
+
+	for _, f := range o.Fields {
+		// Set the key for the field
+		example += fmt.Sprintf(`"%s": `, f.NameLowerSnake)
+
+		// Check if the field is an object
+		if f.Type.IsObject {
+			// Get the object for the field
+			obj, err := p.def.Object(f.Type.ObjectName)
+			if err != nil {
+				return err
+			}
+
+			// Set example for the object if it doesn't have one
+			if obj.Example == nil {
+				if err := p.SetExample(pkg, obj); err != nil {
+					return fmt.Errorf("faield to set example: %v", err)
+				}
+			}
+
+			// Get the encoding of the object-example
+			data, err := json.Marshal(obj.Example)
+			if err != nil {
+				return fmt.Errorf("failed to marshal: %v", err)
+			}
+
+			// format the data depending on if it is an array or not
+			objExample := fmt.Sprintf("%s", string(data))
+			if f.Type.Multiple {
+				objExample = fmt.Sprintf("[%s]", string(data))
+			}
+
+			// add the object-example to the value -
+			// and continue to the next field
+			example += fmt.Sprintf("%s, ", objExample)
+			continue
+		}
+
+		// Set the example-value it is empty
+		if f.Example == nil {
+			switch f.Type.TypeName {
+			case "interface{}":
+				f.Example = "{}"
+			case "map[string]interface{}":
+				f.Example = "{}"
+			case "string":
+				f.Example = "text"
+			case "bool":
+				f.Example = true
+			case "int", "int16", "int32", "int64",
+				"uint", "uint16", "uint32", "uint64":
+				f.Example = 334
+			case "float32", "float64":
+				f.Example = 1.235
+			default:
+				f.Example = `"unknown"`
+			}
+			if f.Type.Multiple {
+				f.Example = []interface{}{f.Example}
+			}
+		}
+
+		// add quotes for the example if it is a string
+		if f.Type.TypeName == "string" && !f.Type.Multiple {
+			f.Example = fmt.Sprintf(`"%s"`, f.Example)
+		}
+
+		// format a json-array if the field is a slice
+		if f.Type.Multiple {
+			var array []string
+			values := f.Example.([]interface{})
+			for _, v := range values {
+				entry := fmt.Sprintf("%v,", v)
+				if f.Type.TypeName == "string" {
+					entry = fmt.Sprintf(`"%s",`, v)
+				}
+
+				array = append(array, entry)
+			}
+
+			// trim the comma from the last entry
+			array[len(array)-1] = strings.TrimRight(array[len(array)-1], ",")
+
+			f.Example = array
+		}
+		// add the example-value to the current field
+		example += fmt.Sprintf("%v, ", f.Example)
+	}
+
+	// trim the last comma from the
+	example = strings.TrimRight(example, ", ")
+	example += "}"
+
+	// parse the json-data to the example-interface
+	if err := json.Unmarshal([]byte(example), &o.Example); err != nil {
+		return fmt.Errorf("failed to unmarshal example: %v", err)
+	}
+
+	return nil
 }
