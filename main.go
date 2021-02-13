@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/dustin/go-humanize"
@@ -38,11 +39,16 @@ flags:`)
 		outfile    = flags.String("out", "", "output file (default: stdout)")
 		pkg        = flags.String("pkg", "", "explicit package name (default: inferred)")
 		v          = flags.Bool("v", false, "verbose output")
+		version    = flags.Bool("version", false, "current version of oto")
 		paramsStr  = flags.String("params", "", "list of parameters in the format: \"key:value,key:value\"")
 		ignoreList = flags.String("ignore", "", "comma separated list of interfaces to ignore")
 	)
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
+	}
+	if *version {
+		fmt.Fprintf(os.Stdout, "oto version %s %s/%s\n", Version, runtime.GOOS, runtime.GOARCH)
+		return nil
 	}
 	if *template == "" {
 		flags.PrintDefaults()
