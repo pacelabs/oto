@@ -1,0 +1,32 @@
+name: Build and Release
+
+on: 
+  release:
+    types: [ created ]
+
+jobs:
+  releases-matrix:
+    name: Release Go Binary
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # build and publish in parallel: linux/386, linux/amd64, windows/amd64, darwin/amd64 
+        goos: [linux, windows, darwin]
+        goarch: ["386", amd64]
+        exclude:  
+          # windows/386 and darwin/386 seems useless 
+          - goarch: "386"
+            goos: windows 
+          - goarch: "386"
+            goos: darwin 
+    steps:
+        - uses: actions/checkout@v2
+        - uses: wangyoucao577/go-release-action@v1.14
+          with:
+            github_token: ${{ secrets.GITHUB_TOKEN }}
+            goos: ${{ matrix.goos }}
+            goarch: ${{ matrix.goarch }}
+            project_path: "./"
+            extra_files: LICENSE.md README.md
+            ldflags: -X "main.Version=${{ github.event.release.tag_name }}"
+  
