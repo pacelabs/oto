@@ -27,6 +27,8 @@ func Render(template string, def parser.Definition, params map[string]interface{
 	ctx.Set("format_comment_text", formatCommentText)
 	ctx.Set("format_comment_html", formatCommentHTML)
 	ctx.Set("format_tags", formatTags)
+	ctx.Set("strip_prefix", stripPrefix)
+	ctx.Set("strip_suffix", stripSuffix)
 	s, err := plush.Render(string(template), ctx)
 	if err != nil {
 		return "", err
@@ -80,4 +82,18 @@ func formatTags(tags ...string) (template.HTML, error) {
 	}
 	tagsStr = "`" + tagsStr + "`"
 	return template.HTML(tagsStr), nil
+}
+
+func stripPrefix(s, prefix string) (string, error) {
+	if !strings.HasPrefix(s, prefix) {
+		return s, errors.Errorf("cannot strip prefix: %s from: %s", prefix, s)
+	}
+	return strings.TrimPrefix(s, prefix), nil
+}
+
+func stripSuffix(s, suffix string) (string, error) {
+	if !strings.HasSuffix(s, suffix) {
+		return s, errors.Errorf("cannot strip suffix: %s from: %s", suffix, s)
+	}
+	return strings.TrimSuffix(s, suffix), nil
 }

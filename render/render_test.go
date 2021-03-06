@@ -112,3 +112,33 @@ func TestFormatCommentText(t *testing.T) {
 	is.Equal(actual, `// What about new lines?`)
 
 }
+
+func TestStripPrefix(t *testing.T) {
+	is := is.New(t)
+
+	stripped, err := stripPrefix("PrefixSuffix", "Prefix")
+	is.NoErr(err)
+	is.Equal(stripped, "Suffix")
+
+	stripped, err = stripPrefix("PrefixSuffix", "Pre")
+	is.NoErr(err)
+	is.Equal(stripped, "fixSuffix")
+
+	_, err = stripPrefix("PrefixSuffix", "refix")
+	is.Equal(err.Error(), "cannot strip prefix: refix from: PrefixSuffix")
+}
+
+func TestStripSuffix(t *testing.T) {
+	is := is.New(t)
+
+	stripped, err := stripSuffix("PrefixSuffix", "Suffix")
+	is.NoErr(err)
+	is.Equal(stripped, "Prefix")
+
+	stripped, err = stripSuffix("PrefixSuffix", "fix")
+	is.NoErr(err)
+	is.Equal(stripped, "PrefixSuf")
+
+	_, err = stripSuffix("PrefixSuffix", "Suf")
+	is.Equal(err.Error(), "cannot strip suffix: Suf from: PrefixSuffix")
+}
