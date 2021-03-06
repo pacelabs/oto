@@ -29,6 +29,8 @@ func Render(template string, def parser.Definition, params map[string]interface{
 	ctx.Set("format_tags", formatTags)
 	ctx.Set("strip_prefix", stripPrefix)
 	ctx.Set("strip_suffix", stripSuffix)
+	ctx.Set("has_prefix", strings.HasPrefix)
+	ctx.Set("has_suffix", strings.HasSuffix)
 	s, err := plush.Render(string(template), ctx)
 	if err != nil {
 		return "", err
