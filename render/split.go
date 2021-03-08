@@ -115,6 +115,19 @@ func camelizeDown(word string) string {
 	return strings.ToLower(word[:1]) + word[1:]
 }
 
+// snakeDown converts a name or other string into a snake case
+// version with all letters lowercase and use underscore for spaces.
+// "ModelID" becomes "model_id".
+func snakeDown(word string) string {
+	if isAcronym(word) {
+		// entire word is an acronym
+		return strings.ToLower(word)
+	}
+	words := Split(word)
+	word = strings.Join(words, "_")
+	return strings.ToLower(word)
+}
+
 func isAcronym(word string) bool {
 	for _, ac := range baseAcronyms {
 		if strings.ToUpper(ac) == strings.ToUpper(word) {

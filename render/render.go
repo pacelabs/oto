@@ -20,6 +20,7 @@ var defaultRuleset = inflect.NewDefaultRuleset()
 func Render(template string, def parser.Definition, params map[string]interface{}) (string, error) {
 	ctx := plush.NewContext()
 	ctx.Set("camelize_down", camelizeDown)
+	ctx.Set("snake_down", snakeDown)
 	ctx.Set("def", def)
 	ctx.Set("params", params)
 	ctx.Set("json", toJSONHelper)
