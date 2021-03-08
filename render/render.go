@@ -32,6 +32,8 @@ func Render(template string, def parser.Definition, params map[string]interface{
 	ctx.Set("strip_suffix", stripSuffix)
 	ctx.Set("has_prefix", strings.HasPrefix)
 	ctx.Set("has_suffix", strings.HasSuffix)
+	ctx.Set("to_lower", strings.ToLower)
+	ctx.Set("to_upper", strings.ToUpper)
 	s, err := plush.Render(string(template), ctx)
 	if err != nil {
 		return "", err
