@@ -1,6 +1,6 @@
 module github.com/meitner-se/oto
 
-go 1.13
+go 1.15
 
 replace github.com/meitner-se/oto/parser => ./parser
 
