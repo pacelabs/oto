@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/matryer/is"
-	"github.com/pacedotdev/oto/parser"
+	"github.com/meitner-se/oto/parser"
 )
 
 func TestRender(t *testing.T) {

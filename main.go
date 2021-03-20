@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/dustin/go-humanize"
-	"github.com/pacedotdev/oto/parser"
-	"github.com/pacedotdev/oto/render"
+	"github.com/meitner-se/oto/parser"
+	"github.com/meitner-se/oto/render"
 	"github.com/pkg/errors"
 )
 
@@ -66,7 +66,7 @@ flags:`)
 	}
 	p.Verbose = *v
 	if p.Verbose {
-		fmt.Println("oto - github.com/pacedotdev/oto", Version)
+		fmt.Println("oto - github.com/meitner-se/oto", Version)
 	}
 	def, err := p.Parse()
 	if err != nil {

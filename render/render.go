@@ -10,7 +10,7 @@ import (
 	"github.com/fatih/structtag"
 	"github.com/gobuffalo/plush"
 	"github.com/markbates/inflect"
-	"github.com/pacedotdev/oto/parser"
+	"github.com/meitner-se/oto/parser"
 	"github.com/pkg/errors"
 )
 
