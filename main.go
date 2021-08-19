@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"strings"
 
 	"github.com/dustin/go-humanize"
@@ -17,6 +18,9 @@ import (
 
 // Version is set during build.
 var Version = "dev"
+
+// Turn off garbage collection for faster parsing
+var _ = debug.SetGCPercent(-1)
 
 func main() {
 	if err := run(os.Stdout, os.Args); err != nil {
