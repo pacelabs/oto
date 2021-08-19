@@ -119,13 +119,47 @@ func camelizeDown(word string) string {
 // version with all letters lowercase and use underscore for spaces.
 // "ModelID" becomes "model_id".
 func snakeDown(word string) string {
+	var res = make([]rune, 0, len(word))
+	var p = '_'
+
+	for i, r := range word {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+			res = append(res, '_')
+		} else if unicode.IsUpper(r) && i > 0 {
+			if unicode.IsLetter(p) && !unicode.IsUpper(p) || unicode.IsDigit(p) {
+				res = append(res, '_', unicode.ToLower(r))
+			} else {
+				res = append(res, unicode.ToLower(r))
+			}
+		} else {
+			res = append(res, unicode.ToLower(r))
+		}
+
+		p = r
+	}
+
+	return string(res)
+}
+
+// camelizeUp converts a name or other string into a camel case
+// version with the first letter uppercase. "modelID" becomes "ModelID".
+func camelizeUp(word string) string {
 	if isAcronym(word) {
 		// entire word is an acronym
 		return strings.ToLower(word)
 	}
 	words := Split(word)
-	word = strings.Join(words, "_")
-	return strings.ToLower(word)
+	for i := range words {
+		if isAcronym(words[i]) {
+			if i == 0 {
+				words[i] = strings.ToLower(words[i])
+			} else {
+				words[i] = strings.ToUpper(words[i])
+			}
+		}
+	}
+	word = strings.Join(words, "")
+	return strings.ToUpper(word[:1]) + word[1:]
 }
 
 func isAcronym(word string) bool {

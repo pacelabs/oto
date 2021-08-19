@@ -6,7 +6,12 @@ package render
 	Copyright (c) 2015 Fatih Arslan
 */
 
-import "fmt"
+import (
+	"fmt"
+	"testing"
+
+	"github.com/matryer/is"
+)
 
 func ExampleSplit() {
 
@@ -50,4 +55,13 @@ func ExampleSplit() {
 	// "BöseÜberraschung" => []string{"Böse", "Überraschung"}
 	// "Two  spaces" => []string{"Two", "  ", "spaces"}
 	// "BadUTF8\xe2\xe2\xa1" => []string{"BadUTF8\xe2\xe2\xa1"}
+}
+
+func TestSnakeDown(t *testing.T) {
+	is := is.New(t)
+
+	is.Equal(snakeDown("Name"), "name")
+	is.Equal(snakeDown("UserIDs"), "user_ids")
+	is.Equal(snakeDown("UserIDS"), "user_ids")
+	is.Equal(snakeDown("EmailAddresses"), "email_addresses")
 }

@@ -26,6 +26,10 @@ type Client struct {
 	RemoteHost  string
 	// HTTPClient is the http.Client to use when making HTTP requests.
 	HTTPClient 	*http.Client
+	// BeforeRequest is an optional hook that gives you the opportunity
+	// to inspect or modify the request before it is made.
+	// Useful for adding auth headers, for example.
+	BeforeRequest func(r *http.Request) error
 	// Debug writes a line of debug log output.
 	Debug func(s string)
 }
@@ -68,6 +72,13 @@ func New<%= service.Name %>(client *Client) *<%= service.Name %> {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept-Encoding", "gzip")
 	req = req.WithContext(ctx)
+	if s.client.BeforeRequest != nil {
+		err = s.client.BeforeRequest(req)
+		if err != nil {
+			// don't wrap this error, it belongs to the user
+			return nil, err
+		}
+	}
 	resp, err := s.client.HTTPClient.Do(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "<%= service.Name %>.<%= method.Name %>")
@@ -109,7 +120,7 @@ func New<%= service.Name %>(client *Client) *<%= service.Name %> {
 		<%= format_comment_text(object.Comment) %>type <%= object.Name %> struct {
 			<%= for (field) in object.Fields { %>
 				<%= if (field.Name != "Error") { %>
- 					<%= format_comment_text(field.Comment) %><%= field.Name %> <%= if (field.Type.Multiple == true) { %>[]<% } %><%= field.Type.TypeName %> `json:"<%= camelize_down(field.Name) %><%= if (field.OmitEmpty) { %>,omitempty<% } %>"`
+ 					<%= format_comment_text(field.Comment) %><%= field.Name %> <%= if (field.Type.Multiple == true) { %>[]<% } %><%= field.Type.TypeName %> `json:"<%= field.NameLowerCamel %><%= if (field.OmitEmpty) { %>,omitempty<% } %>"`
 				<% } %>
 			<% } %>
 		}

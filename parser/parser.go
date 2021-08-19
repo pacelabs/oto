@@ -8,6 +8,7 @@ import (
 	"go/doc"
 	"go/token"
 	"go/types"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -108,7 +109,6 @@ type Object struct {
 	// Metadata are typed key/value pairs extracted from the
 	// comments.
 	Metadata map[string]interface{} `json:"metadata"`
-	Example  interface{}            `json:"example"`
 }
 
 // Field describes the field inside an Object.
@@ -139,15 +139,19 @@ type FieldTag struct {
 // FieldType holds information about the type of data that this
 // Field stores.
 type FieldType struct {
-	TypeID               string `json:"typeID"`
-	TypeName             string `json:"typeName"`
-	ObjectName           string `json:"objectName"`
+	TypeID     string `json:"typeID"`
+	TypeName   string `json:"typeName"`
+	ObjectName string `json:"objectName"`
+	// CleanObjectName is the ObjectName with * removed
+	// for pointer types.
+	CleanObjectName      string `json:"cleanObjectName"`
 	ObjectNameLowerCamel string `json:"objectNameLowerCamel"`
 	ObjectNameLowerSnake string `json:"objectNameLowerSnake"`
 	Multiple             bool   `json:"multiple"`
 	Package              string `json:"package"`
 	IsObject             bool   `json:"isObject"`
 	JSType               string `json:"jsType"`
+	TSType               string `json:"tsType"`
 	SwiftType            string `json:"swiftType"`
 }
 
@@ -235,8 +239,13 @@ func (p *Parser) Parse() (Definition, error) {
 		nonExcludedObjects = append(nonExcludedObjects, object)
 	}
 	p.def.Objects = nonExcludedObjects
+	// sort services
 	sort.Slice(p.def.Services, func(i, j int) bool {
 		return p.def.Services[i].Name < p.def.Services[j].Name
+	})
+	// sort objects
+	sort.Slice(p.def.Objects, func(i, j int) bool {
+		return p.def.Objects[i].Name < p.def.Objects[j].Name
 	})
 	if err := p.addOutputFields(); err != nil {
 		return p.def, err
@@ -325,7 +334,7 @@ func (p *Parser) parseObject(pkg *packages.Package, o types.Object, v *types.Str
 	obj.TypeID = o.Pkg().Path() + "." + obj.Name
 	obj.Fields = []Field{}
 	for i := 0; i < st.NumFields(); i++ {
-		field, err := p.parseField(pkg, obj.Name, st.Field(i))
+		field, err := p.parseField(pkg, obj.Name, st.Field(i), st.Tag(i))
 		if err != nil {
 			return err
 		}
@@ -335,9 +344,6 @@ func (p *Parser) parseObject(pkg *packages.Package, o types.Object, v *types.Str
 			return errors.Wrap(err, "parse field tag")
 		}
 		obj.Fields = append(obj.Fields, field)
-	}
-	if err := p.SetExample(pkg, &obj); err != nil {
-		return err
 	}
 	p.def.Objects = append(p.def.Objects, obj)
 	p.objects[obj.Name] = struct{}{}
@@ -359,11 +365,20 @@ func (p *Parser) parseTags(tag string) (map[string]FieldTag, error) {
 	return fieldTags, nil
 }
 
-func (p *Parser) parseField(pkg *packages.Package, objectName string, v *types.Var) (Field, error) {
+func (p *Parser) parseField(pkg *packages.Package, objectName string, v *types.Var, tag string) (Field, error) {
 	var f Field
 	f.Name = v.Name()
 	f.NameLowerCamel = camelizeDown(f.Name)
 	f.NameLowerSnake = snakeDown(f.Name)
+	// if it has a json tag, use that as the NameJSON.
+	if tag != "" {
+		fieldTag := reflect.StructTag(tag)
+		jsonTag := fieldTag.Get("json")
+		if jsonTag != "" {
+			f.NameLowerCamel = strings.Split(jsonTag, ",")[0]
+			f.NameLowerSnake = strings.Split(jsonTag, ",")[0]
+		}
+	}
 	f.Comment = p.commentForField(objectName, f.Name)
 	f.Metadata = map[string]interface{}{}
 	if !v.Exported() {
@@ -374,13 +389,34 @@ func (p *Parser) parseField(pkg *packages.Package, objectName string, v *types.V
 	if err != nil {
 		return f, p.wrapErr(errors.New("extract comment metadata"), pkg, v.Pos())
 	}
-	if example, ok := f.Metadata["example"]; ok {
-		f.Example = example
-	}
 	f.Type, err = p.parseFieldType(pkg, v)
 	if err != nil {
 		return f, errors.Wrap(err, "parse type")
 	}
+	example, ok := f.Metadata["example"]
+	if !ok {
+		switch f.Type.TypeName {
+		case "interface{}":
+			example = "{}"
+		case "map[string]interface{}":
+			example = "{}"
+		case "string":
+			example = "text"
+		case "bool":
+			example = true
+		case "int", "int16", "int32", "int64",
+			"uint", "uint16", "uint32", "uint64":
+			example = 334
+		case "float32", "float64":
+			example = 1.235
+		default:
+			example = nil
+		}
+		if f.Type.Multiple {
+			example = []interface{}{example}
+		}
+	}
+	f.Example = example
 	return f, nil
 }
 
@@ -399,10 +435,18 @@ func (p *Parser) parseFieldType(pkg *packages.Package, obj types.Object) (FieldT
 		}
 		return "" // no package prefix
 	}
+
 	typ := obj.Type()
 	if slice, ok := obj.Type().(*types.Slice); ok {
 		typ = slice.Elem()
 		ftype.Multiple = true
+	}
+	isPointer := true
+	originalTyp := typ
+	pointerType, isPointer := typ.(*types.Pointer)
+	if isPointer {
+		typ = pointerType.Elem()
+		isPointer = true
 	}
 	if named, ok := typ.(*types.Named); ok {
 		if structure, ok := named.Underlying().(*types.Struct); ok {
@@ -412,33 +456,47 @@ func (p *Parser) parseFieldType(pkg *packages.Package, obj types.Object) (FieldT
 			ftype.IsObject = true
 		}
 	}
-	ftype.TypeName = types.TypeString(typ, resolver)
-	ftype.ObjectName = types.TypeString(typ, func(other *types.Package) string { return "" })
+	// disallow nested structs
+	switch typ.(type) {
+	case *types.Struct:
+		return ftype, p.wrapErr(errors.New("nested structs not supported (create another type instead)"), pkg, obj.Pos())
+	}
+	ftype.TypeName = types.TypeString(originalTyp, resolver)
+	ftype.ObjectName = types.TypeString(originalTyp, func(other *types.Package) string { return "" })
 	ftype.ObjectNameLowerCamel = camelizeDown(ftype.ObjectName)
 	ftype.ObjectNameLowerSnake = snakeDown(ftype.ObjectName)
 	ftype.TypeID = pkgPath + "." + ftype.ObjectName
+	ftype.CleanObjectName = strings.TrimPrefix(ftype.TypeName, "*")
+	ftype.TSType = ftype.CleanObjectName
+	ftype.JSType = ftype.CleanObjectName
+	ftype.SwiftType = ftype.CleanObjectName
 	if ftype.IsObject {
 		ftype.JSType = "object"
-		ftype.SwiftType = "Any"
+		//ftype.SwiftType = "Any"
 	} else {
-		switch ftype.TypeName {
+		switch ftype.CleanObjectName {
 		case "interface{}":
 			ftype.JSType = "any"
 			ftype.SwiftType = "Any"
+			ftype.TSType = "object"
 		case "map[string]interface{}":
 			ftype.JSType = "object"
+			ftype.TSType = "object"
 			ftype.SwiftType = "Any"
 		case "string":
 			ftype.JSType = "string"
 			ftype.SwiftType = "String"
+			ftype.TSType = "string"
 		case "bool":
 			ftype.JSType = "boolean"
 			ftype.SwiftType = "Bool"
+			ftype.TSType = "boolean"
 		case "int", "int16", "int32", "int64",
 			"uint", "uint16", "uint32", "uint64",
 			"float32", "float64":
 			ftype.JSType = "number"
 			ftype.SwiftType = "Double"
+			ftype.TSType = "number"
 		}
 	}
 
@@ -458,6 +516,7 @@ func (p *Parser) addOutputFields() error {
 			TypeName:  "string",
 			JSType:    "string",
 			SwiftType: "String",
+			TSType:    "string",
 		},
 		Metadata: map[string]interface{}{},
 		Example:  "something went wrong",
@@ -607,110 +666,4 @@ func (p *Parser) extractCommentMetadata(comment string) (map[string]interface{},
 		lines = append(lines, line)
 	}
 	return metadata, strings.Join(lines, "\n"), nil
-}
-
-// SetExample sets an object-example for the specified object
-func (p *Parser) SetExample(pkg *packages.Package, o *Object) error {
-	// example is the json-string
-	// that will be parsed to *Object.Example
-	example := "{"
-
-	for _, f := range o.Fields {
-		// Set the key for the field
-		example += fmt.Sprintf(`"%s": `, f.NameLowerSnake)
-
-		// Check if the field is an object
-		if f.Type.IsObject {
-			// Get the object for the field
-			obj, err := p.def.Object(f.Type.ObjectName)
-			if err != nil {
-				return err
-			}
-
-			// Set example for the object if it doesn't have one
-			if obj.Example == nil {
-				if err := p.SetExample(pkg, obj); err != nil {
-					return fmt.Errorf("faield to set example: %v", err)
-				}
-			}
-
-			// Get the encoding of the object-example
-			data, err := json.Marshal(obj.Example)
-			if err != nil {
-				return fmt.Errorf("failed to marshal: %v", err)
-			}
-
-			// format the data depending on if it is an array or not
-			objExample := fmt.Sprintf("%s", string(data))
-			if f.Type.Multiple {
-				objExample = fmt.Sprintf("[%s]", string(data))
-			}
-
-			// add the object-example to the value -
-			// and continue to the next field
-			example += fmt.Sprintf("%s, ", objExample)
-			continue
-		}
-
-		// Set the example-value it is empty
-		if f.Example == nil {
-			switch f.Type.TypeName {
-			case "interface{}":
-				f.Example = "{}"
-			case "map[string]interface{}":
-				f.Example = "{}"
-			case "string":
-				f.Example = "text"
-			case "bool":
-				f.Example = true
-			case "int", "int16", "int32", "int64",
-				"uint", "uint16", "uint32", "uint64":
-				f.Example = 334
-			case "float32", "float64":
-				f.Example = 1.235
-			default:
-				f.Example = `"unknown"`
-			}
-			if f.Type.Multiple {
-				f.Example = []interface{}{f.Example}
-			}
-		}
-
-		// add quotes for the example if it is a string
-		if f.Type.TypeName == "string" && !f.Type.Multiple {
-			f.Example = fmt.Sprintf(`"%s"`, f.Example)
-		}
-
-		// format a json-array if the field is a slice
-		if f.Type.Multiple {
-			var array []string
-			values := f.Example.([]interface{})
-			for _, v := range values {
-				entry := fmt.Sprintf("%v,", v)
-				if f.Type.TypeName == "string" {
-					entry = fmt.Sprintf(`"%s",`, v)
-				}
-
-				array = append(array, entry)
-			}
-
-			// trim the comma from the last entry
-			array[len(array)-1] = strings.TrimRight(array[len(array)-1], ",")
-
-			f.Example = array
-		}
-		// add the example-value to the current field
-		example += fmt.Sprintf("%v, ", f.Example)
-	}
-
-	// trim the last comma from the
-	example = strings.TrimRight(example, ", ")
-	example += "}"
-
-	// parse the json-data to the example-interface
-	if err := json.Unmarshal([]byte(example), &o.Example); err != nil {
-		return fmt.Errorf("failed to unmarshal example: %v", err)
-	}
-
-	return nil
 }
