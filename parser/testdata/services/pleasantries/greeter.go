@@ -27,7 +27,7 @@ type GreetRequest struct {
 // person's greeting.
 type GreetResponse struct {
 	// Greeting is the greeted person's Greeting.
-	Greeting Greeting
+	Greeting *Greeting
 }
 
 // GetGreetingsRequest is the request object for GreeterService.GetGreetings.

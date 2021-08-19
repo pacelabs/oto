@@ -2,7 +2,6 @@ package parser
 
 import (
 	"bytes"
-	"encoding/json"
 	"go/doc"
 	"strings"
 	"testing"
@@ -48,7 +47,13 @@ You will love it.`)
 	is.Equal(def.Services[0].Methods[1].InputObject.Package, "")
 	is.Equal(def.Services[0].Methods[1].OutputObject.TypeName, "GreetResponse")
 	is.Equal(def.Services[0].Methods[1].OutputObject.Multiple, false)
+	is.Equal(def.Services[0].Methods[1].OutputObject.IsObject, true)
 	is.Equal(def.Services[0].Methods[1].OutputObject.Package, "")
+
+	greetResponse, err := def.Object(def.Services[0].Methods[1].OutputObject.TypeName)
+	is.NoErr(err)
+	is.Equal(greetResponse.Fields[0].Name, "Greeting")
+	is.Equal(greetResponse.Fields[0].Type.IsObject, true)
 
 	formatCommentText := func(s string) string {
 		var buf bytes.Buffer
@@ -72,11 +77,13 @@ You will love it.`)
 	is.Equal(greetInputObject.Fields[0].Comment, "Page describes which page of data to get.")
 	is.Equal(greetInputObject.Fields[0].OmitEmpty, false)
 	is.Equal(greetInputObject.Fields[0].Type.TypeName, "services.Page")
+	is.Equal(greetInputObject.Fields[0].Type.CleanObjectName, "services.Page")
 	is.Equal(greetInputObject.Fields[0].Type.ObjectName, "Page")
 	is.Equal(greetInputObject.Fields[0].Type.ObjectNameLowerCamel, "page")
 	is.Equal(greetInputObject.Fields[0].Type.ObjectNameLowerSnake, "page")
 	is.Equal(greetInputObject.Fields[0].Type.JSType, "object")
 	is.Equal(greetInputObject.Fields[0].Type.TypeID, "github.com/meitner-se/oto/testdata/services.Page")
+	is.Equal(greetInputObject.Fields[0].Type.TSType, "services.Page")
 	is.Equal(greetInputObject.Fields[0].Type.IsObject, true)
 	is.Equal(greetInputObject.Fields[0].Type.Multiple, false)
 	is.Equal(greetInputObject.Fields[0].Type.Package, "github.com/meitner-se/oto/testdata/services")
@@ -87,7 +94,7 @@ You will love it.`)
 	is.Equal(greetInputObject.Fields[0].ParsedTags["tagtest"].Options[0], "option1")
 	is.Equal(greetInputObject.Fields[0].ParsedTags["tagtest"].Options[1], "option2")
 
-	example, err := json.Marshal(greetInputObject.Example)
+	example, err := def.ExampleJSON(*greetInputObject)
 	is.NoErr(err)
 	is.Equal(string(example), `{"page":{"cursor":"text","order_asc":true,"order_field":"text"}}`)
 
@@ -113,14 +120,15 @@ You will love it.`)
 	is.Equal(greetOutputObject.Fields[1].Type.Multiple, false)
 	is.Equal(greetOutputObject.Fields[1].Type.Package, "")
 
-	example, err = json.Marshal(greetOutputObject.Example)
+	example, err = def.ExampleJSON(*greetOutputObject)
 	is.NoErr(err)
-	is.Equal(string(example), `{"greetings":[{"text":"Hello there"}]}`)
+	is.Equal(string(example), `{"error":"something went wrong","greetings":[{"text":"Hello there"}]}`)
 
 	is.Equal(def.Services[1].Name, "StrangeTypesService")
 	strangeInputObj, err := def.Object(def.Services[1].Methods[0].InputObject.ObjectName)
 	is.NoErr(err)
 	is.Equal(strangeInputObj.Fields[0].Type.JSType, "any")
+	is.Equal(strangeInputObj.Fields[0].Type.TSType, "object")
 
 	is.Equal(def.Services[2].Name, "Welcomer")
 	is.Equal(len(def.Services[2].Methods), 1)
@@ -137,15 +145,15 @@ You will love it.`)
 	is.Equal(welcomeInputObject.Name, "WelcomeRequest")
 	is.Equal(len(welcomeInputObject.Fields), 4)
 
-	example, err = json.Marshal(welcomeInputObject.Example)
+	example, err = def.ExampleJSON(*welcomeInputObject)
 	is.NoErr(err)
-	is.Equal(string(example), `{"name":"John Smith","new_customer":true,"times":3,"to":"your@email.com"}`)
+	is.Equal(string(example), `{"customer_details":{"new_customer":true},"name":"John Smith","recipients":"your@email.com","times":3}`)
 
 	is.Equal(welcomeInputObject.Fields[0].Name, "To")
 	is.Equal(welcomeInputObject.Fields[0].Comment, "To is the address of the person to send the message to.")
 	is.Equal(welcomeInputObject.Fields[0].Metadata["featured"], true)
-	is.Equal(welcomeInputObject.Fields[0].NameLowerCamel, "to")
-	is.Equal(welcomeInputObject.Fields[0].NameLowerSnake, "to")
+	is.Equal(welcomeInputObject.Fields[0].NameLowerSnake, "recipients") // changed by json tag
+	is.Equal(welcomeInputObject.Fields[0].NameLowerCamel, "recipients") // changed by json tag
 	is.Equal(welcomeInputObject.Fields[0].OmitEmpty, false)
 	is.Equal(welcomeInputObject.Fields[0].Type.TypeName, "string")
 	is.Equal(welcomeInputObject.Fields[0].Type.Multiple, false)
@@ -157,8 +165,9 @@ You will love it.`)
 	is.Equal(welcomeInputObject.Fields[1].NameLowerCamel, "name")
 	is.Equal(welcomeInputObject.Fields[1].NameLowerSnake, "name")
 	is.Equal(welcomeInputObject.Fields[1].OmitEmpty, false)
-	is.Equal(welcomeInputObject.Fields[1].Type.TypeName, "string")
+	is.Equal(welcomeInputObject.Fields[1].Type.TypeName, "*string")
 	is.Equal(welcomeInputObject.Fields[1].Type.JSType, "string")
+	is.Equal(welcomeInputObject.Fields[1].Type.TSType, "string")
 	is.Equal(welcomeInputObject.Fields[1].Type.SwiftType, "String")
 	is.Equal(welcomeInputObject.Fields[1].Type.Multiple, false)
 	is.Equal(welcomeInputObject.Fields[1].Type.Package, "")
@@ -166,20 +175,23 @@ You will love it.`)
 
 	is.Equal(welcomeInputObject.Fields[2].Example, float64(3))
 	is.Equal(welcomeInputObject.Fields[2].Type.JSType, "number")
+	is.Equal(welcomeInputObject.Fields[2].Type.TSType, "number")
 	is.Equal(welcomeInputObject.Fields[2].Type.SwiftType, "Double")
 
-	is.Equal(welcomeInputObject.Fields[3].Example, true)
-	is.Equal(welcomeInputObject.Fields[3].Type.JSType, "boolean")
-	is.Equal(welcomeInputObject.Fields[3].Type.SwiftType, "Bool")
+	is.Equal(welcomeInputObject.Fields[3].Type.TypeName, "*CustomerDetails")
+	is.Equal(welcomeInputObject.Fields[3].Type.JSType, "object")
+	is.Equal(welcomeInputObject.Fields[3].Type.TSType, "CustomerDetails")
+	is.Equal(welcomeInputObject.Fields[3].Example, nil)
+	is.Equal(welcomeInputObject.Fields[3].Type.SwiftType, "CustomerDetails")
 
 	welcomeOutputObject, err := def.Object(def.Services[2].Methods[0].OutputObject.TypeName)
 	is.NoErr(err)
 	is.Equal(welcomeOutputObject.Name, "WelcomeResponse")
 	is.Equal(len(welcomeOutputObject.Fields), 2)
 
-	example, err = json.Marshal(welcomeOutputObject.Example)
+	example, err = def.ExampleJSON(*welcomeOutputObject)
 	is.NoErr(err)
-	is.Equal(string(example), `{"message":"Welcome John Smith."}`)
+	is.Equal(string(example), `{"error":"something went wrong","message":"Welcome John Smith."}`)
 
 	is.Equal(welcomeOutputObject.Fields[0].Name, "Message")
 	is.Equal(welcomeOutputObject.Fields[0].NameLowerCamel, "message")
@@ -197,10 +209,11 @@ You will love it.`)
 	is.Equal(welcomeOutputObject.Fields[1].Type.Multiple, false)
 	is.Equal(welcomeOutputObject.Fields[1].Type.Package, "")
 	is.Equal(welcomeOutputObject.Fields[1].Type.JSType, "string")
+	is.Equal(welcomeOutputObject.Fields[1].Type.TSType, "string")
 	is.Equal(welcomeOutputObject.Fields[1].Type.SwiftType, "String")
 	is.True(welcomeOutputObject.Metadata != nil)
 
-	is.Equal(len(def.Objects), 10)
+	is.Equal(len(def.Objects), 11)
 	for i := range def.Objects {
 		switch def.Objects[i].Name {
 		case "Greeting":
@@ -250,4 +263,14 @@ func TestObjectIsInputOutput(t *testing.T) {
 	is.Equal(def.ObjectIsInput("GreetResponse"), false)
 	is.Equal(def.ObjectIsOutput("GreetRequest"), false)
 	is.Equal(def.ObjectIsOutput("GreetResponse"), true)
+}
+
+func TestParseNestedStructs(t *testing.T) {
+	is := is.New(t)
+	patterns := []string{"./testdata/nested-structs"}
+	p := New(patterns...)
+	p.Verbose = testing.Verbose()
+	_, err := p.Parse()
+	is.True(err != nil)
+	is.True(strings.Contains(err.Error(), "nested structs not supported"))
 }

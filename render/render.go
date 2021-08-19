@@ -20,6 +20,7 @@ var defaultRuleset = inflect.NewDefaultRuleset()
 func Render(template string, def parser.Definition, params map[string]interface{}) (string, error) {
 	ctx := plush.NewContext()
 	ctx.Set("camelize_down", camelizeDown)
+	ctx.Set("camelize_up", camelizeUp)
 	ctx.Set("snake_down", snakeDown)
 	ctx.Set("def", def)
 	ctx.Set("params", params)
@@ -42,7 +43,7 @@ func Render(template string, def parser.Definition, params map[string]interface{
 }
 
 func toJSONHelper(v interface{}) (template.HTML, error) {
-	b, err := json.Marshal(v)
+	b, err := json.MarshalIndent(v, "", "\t")
 	if err != nil {
 		return "", err
 	}
