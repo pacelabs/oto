@@ -144,15 +144,28 @@ type FieldType struct {
 	ObjectName string `json:"objectName"`
 	// CleanObjectName is the ObjectName with * removed
 	// for pointer types.
-	CleanObjectName      string `json:"cleanObjectName"`
-	ObjectNameLowerCamel string `json:"objectNameLowerCamel"`
-	ObjectNameLowerSnake string `json:"objectNameLowerSnake"`
-	Multiple             bool   `json:"multiple"`
-	Package              string `json:"package"`
-	IsObject             bool   `json:"isObject"`
-	JSType               string `json:"jsType"`
-	TSType               string `json:"tsType"`
-	SwiftType            string `json:"swiftType"`
+	CleanObjectName      string       `json:"cleanObjectName"`
+	ObjectNameLowerCamel string       `json:"objectNameLowerCamel"`
+	ObjectNameLowerSnake string       `json:"objectNameLowerSnake"`
+	Multiple             bool         `json:"multiple"`
+	Package              string       `json:"package"`
+	IsObject             bool         `json:"isObject"`
+	JSType               string       `json:"jsType"`
+	TSType               string       `json:"tsType"`
+	SwiftType            string       `json:"swiftType"`
+	IsMap                bool         `json:"is_map"`
+	Map                  FieldTypeMap `json:"map"`
+}
+
+type FieldTypeMap struct {
+	Key               string
+	Element           string
+	ElementIsMultiple bool
+}
+
+// IsOptional returns true for pointer types (optional).
+func (f FieldType) IsOptional() bool {
+	return strings.HasPrefix(f.ObjectName, "*")
 }
 
 // Parser parses Oto Go definition packages.
@@ -437,16 +450,19 @@ func (p *Parser) parseFieldType(pkg *packages.Package, obj types.Object) (FieldT
 	}
 
 	typ := obj.Type()
-	if slice, ok := obj.Type().(*types.Slice); ok {
+	if slice, ok := typ.(*types.Slice); ok {
 		typ = slice.Elem()
 		ftype.Multiple = true
 	}
-	isPointer := true
+
 	originalTyp := typ
 	pointerType, isPointer := typ.(*types.Pointer)
 	if isPointer {
 		typ = pointerType.Elem()
-		isPointer = true
+		if slice, ok := typ.(*types.Slice); ok {
+			typ = slice.Elem()
+			ftype.Multiple = true
+		}
 	}
 	if named, ok := typ.(*types.Named); ok {
 		if structure, ok := named.Underlying().(*types.Struct); ok {
@@ -456,11 +472,29 @@ func (p *Parser) parseFieldType(pkg *packages.Package, obj types.Object) (FieldT
 			ftype.IsObject = true
 		}
 	}
+	mapType, isMap := typ.(*types.Map)
+	if isMap {
+		keyType := mapType.Key()
+		elementType := mapType.Elem()
+
+		ftype.IsMap = true
+		ftype.Map = FieldTypeMap{
+			Key:               types.TypeString(keyType, resolver),
+			Element:           types.TypeString(elementType, resolver),
+			ElementIsMultiple: false,
+		}
+
+		if slice, ok := elementType.(*types.Slice); ok {
+			ftype.Map.Element = types.TypeString(slice.Elem(), resolver)
+			ftype.Map.ElementIsMultiple = true
+		}
+	}
 	// disallow nested structs
 	switch typ.(type) {
 	case *types.Struct:
 		return ftype, p.wrapErr(errors.New("nested structs not supported (create another type instead)"), pkg, obj.Pos())
 	}
+
 	ftype.TypeName = types.TypeString(originalTyp, resolver)
 	ftype.ObjectName = types.TypeString(originalTyp, func(other *types.Package) string { return "" })
 	ftype.ObjectNameLowerCamel = camelizeDown(ftype.ObjectName)

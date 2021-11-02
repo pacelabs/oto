@@ -94,10 +94,6 @@ You will love it.`)
 	is.Equal(greetInputObject.Fields[0].ParsedTags["tagtest"].Options[0], "option1")
 	is.Equal(greetInputObject.Fields[0].ParsedTags["tagtest"].Options[1], "option2")
 
-	example, err := def.ExampleJSON(*greetInputObject)
-	is.NoErr(err)
-	is.Equal(string(example), `{"page":{"cursor":"text","order_asc":true,"order_field":"text"}}`)
-
 	greetOutputObject, err := def.Object(def.Services[0].Methods[0].OutputObject.TypeName)
 	is.NoErr(err)
 	is.Equal(greetOutputObject.Name, "GetGreetingsResponse")
@@ -120,7 +116,7 @@ You will love it.`)
 	is.Equal(greetOutputObject.Fields[1].Type.Multiple, false)
 	is.Equal(greetOutputObject.Fields[1].Type.Package, "")
 
-	example, err = def.ExampleJSON(*greetOutputObject)
+	example, err := def.ExampleJSON(*greetOutputObject)
 	is.NoErr(err)
 	is.Equal(string(example), `{"error":"something went wrong","greetings":[{"text":"Hello there"}]}`)
 
@@ -231,6 +227,15 @@ You will love it.`)
 	// log.Println(string(b))
 }
 
+func TestFieldTypeIsOptional(t *testing.T) {
+	is := is.New(t)
+
+	f := FieldType{ObjectName: "*SomeType"}
+	is.Equal(f.IsOptional(), true)
+	f = FieldType{ObjectName: "SomeType"}
+	is.Equal(f.IsOptional(), false)
+}
+
 func TestExtractCommentMetadata(t *testing.T) {
 	is := is.New(t)
 
@@ -273,4 +278,53 @@ func TestParseNestedStructs(t *testing.T) {
 	_, err := p.Parse()
 	is.True(err != nil)
 	is.True(strings.Contains(err.Error(), "nested structs not supported"))
+}
+
+func TestParseMap(t *testing.T) {
+	is := is.New(t)
+	patterns := []string{"./testdata/maps"}
+	p := New(patterns...)
+	p.Verbose = testing.Verbose()
+	def, err := p.Parse()
+	is.NoErr(err)
+
+	greetInputObject, err := def.Object("GreetRequest")
+	is.NoErr(err)
+	is.Equal(len(greetInputObject.Fields), 1)
+	is.Equal(greetInputObject.Fields[0].Name, "GreetingMap")
+	is.Equal(greetInputObject.Fields[0].Type.IsMap, true)
+	is.Equal(greetInputObject.Fields[0].Type.Map.Key, "string")
+	is.Equal(greetInputObject.Fields[0].Type.Map.Element, "int")
+	is.Equal(greetInputObject.Fields[0].Type.Map.ElementIsMultiple, false)
+
+	greetOutputObject, err := def.Object("GreetResponse")
+	is.NoErr(err)
+	is.Equal(len(greetOutputObject.Fields), 2)
+	is.Equal(greetOutputObject.Fields[0].Name, "Greeting")
+	is.Equal(greetOutputObject.Fields[0].Type.IsMap, true)
+	is.Equal(greetOutputObject.Fields[0].Type.Map.Key, "string")
+	is.Equal(greetOutputObject.Fields[0].Type.Map.Element, "string")
+	is.Equal(greetOutputObject.Fields[0].Type.Map.ElementIsMultiple, false)
+	is.Equal(greetOutputObject.Fields[1].Name, "Error")
+	is.Equal(greetOutputObject.Fields[1].Type.IsMap, false)
+
+	greetMultipleInputObject, err := def.Object("GreetMultipleRequest")
+	is.NoErr(err)
+	is.Equal(len(greetMultipleInputObject.Fields), 1)
+	is.Equal(greetMultipleInputObject.Fields[0].Name, "GreetingMap")
+	is.Equal(greetMultipleInputObject.Fields[0].Type.IsMap, true)
+	is.Equal(greetMultipleInputObject.Fields[0].Type.Map.Key, "string")
+	is.Equal(greetMultipleInputObject.Fields[0].Type.Map.Element, "GreetRequest")
+	is.Equal(greetMultipleInputObject.Fields[0].Type.Map.ElementIsMultiple, true)
+
+	greetMultipleOutputObject, err := def.Object("GreetMultipleResponse")
+	is.NoErr(err)
+	is.Equal(len(greetMultipleOutputObject.Fields), 2)
+	is.Equal(greetMultipleOutputObject.Fields[0].Name, "Greeting")
+	is.Equal(greetMultipleOutputObject.Fields[0].Type.IsMap, true)
+	is.Equal(greetMultipleOutputObject.Fields[0].Type.Map.Key, "string")
+	is.Equal(greetMultipleOutputObject.Fields[0].Type.Map.Element, "GreetResponse")
+	is.Equal(greetMultipleOutputObject.Fields[0].Type.Map.ElementIsMultiple, true)
+	is.Equal(greetMultipleOutputObject.Fields[1].Name, "Error")
+	is.Equal(greetMultipleOutputObject.Fields[1].Type.IsMap, false)
 }

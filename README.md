@@ -32,7 +32,7 @@ These templates are already being used in production.
 Install the project:
 
 ```
-go install github.com/pacedotdev/oto
+go install github.com/pacedotdev/oto@latest
 ```
 
 Create a project folder, and write your service definition as a Go interface:
