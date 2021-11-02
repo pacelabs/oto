@@ -123,9 +123,27 @@ func snakeDown(word string) string {
 		// entire word is an acronym
 		return strings.ToLower(word)
 	}
-	words := Split(word)
-	word = strings.Join(words, "_")
-	return strings.ToLower(word)
+
+	var res = make([]rune, 0, len(word))
+	var p = '_'
+
+	for i, r := range word {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+			res = append(res, '_')
+		} else if unicode.IsUpper(r) && i > 0 {
+			if unicode.IsLetter(p) && !unicode.IsUpper(p) || unicode.IsDigit(p) {
+				res = append(res, '_', unicode.ToLower(r))
+			} else {
+				res = append(res, unicode.ToLower(r))
+			}
+		} else {
+			res = append(res, unicode.ToLower(r))
+		}
+
+		p = r
+	}
+
+	return string(res)
 }
 
 func isAcronym(word string) bool {
