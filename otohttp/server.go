@@ -87,8 +87,13 @@ func Encode(w http.ResponseWriter, r *http.Request, status int, v interface{}) e
 
 // Decode unmarshals the object in the request into v.
 func Decode(r *http.Request, v interface{}) error {
-	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
-		return errors.Wrap(err, "decode json")
+	bodyBytes, err := io.ReadAll(io.LimitReader(r.Body, 1024*1024))
+	if err != nil {
+		return fmt.Errorf("Decode: read body: %w", err)
+	}
+	err = json.Unmarshal(bodyBytes, v)
+	if err != nil {
+		return fmt.Errorf("Decode: json.Unmarshal: %w", err)
 	}
 	return nil
 }

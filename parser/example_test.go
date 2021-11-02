@@ -32,9 +32,8 @@ func TestObjectExample(t *testing.T) {
 				NameLowerSnake: "favourites",
 				Type: FieldType{
 					TypeName:        "obj2",
-					ObjectName:      "obj2",
-					CleanObjectName: "obj2",
 					IsObject:        true,
+					CleanObjectName: "obj2",
 				},
 			},
 		},
@@ -43,7 +42,7 @@ func TestObjectExample(t *testing.T) {
 		Name: "obj2",
 		Fields: []Field{
 			{
-				Type:           FieldType{TypeName: "string", Multiple: true},
+				Type:           FieldType{TypeName: "string", Multiple: true, CleanObjectName: "string"},
 				NameLowerSnake: "languages",
 				Example:        "Go",
 			},
@@ -69,4 +68,5 @@ func TestObjectExample(t *testing.T) {
 	exampleJSON, err := def.ExampleJSON(obj1)
 	is.NoErr(err)
 	is.Equal(string(exampleJSON), `{"favourites":{"languages":["Go","Go","Go"]},"name":"Mat","project":"Respond","sinceYear":2021}`)
+
 }

@@ -3,7 +3,6 @@ package parser
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 )
 
 // Example generates an object that is a realistic example
@@ -14,9 +13,9 @@ func (d *Definition) Example(o Object) (map[string]interface{}, error) {
 	obj := make(map[string]interface{})
 	for _, field := range o.Fields {
 		if field.Type.IsObject {
-			subobj, err := d.Object(strings.TrimPrefix(field.Type.ObjectName, "*"))
+			subobj, err := d.Object(field.Type.CleanObjectName)
 			if err != nil {
-				return nil, fmt.Errorf("Object(%q): %w", field.Type.ObjectName, err)
+				return nil, fmt.Errorf("Object(%q): %w", field.Type.CleanObjectName, err)
 			}
 			example, err := d.Example(*subobj)
 			if err != nil {

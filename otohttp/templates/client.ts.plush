@@ -20,9 +20,9 @@ export class Client {
 <%= format_comment_text(service.Comment) %>export class <%= service.Name %> {
 	constructor(readonly client: Client) {}
 	<%= for (method) in service.Methods { %>
-	<%= format_comment_text(method.Comment) %>	async <%= method.NameLowerCamel %>(<%= camelize_down(method.InputObject.TypeName) %>?: <%= method.InputObject.TypeName %>, modifyHeaders?: HeadersFunc): Promise<<%= method.OutputObject.TypeName %>> {
-		if (<%= camelize_down(method.InputObject.TypeName) %> == null) {
-			<%= camelize_down(method.InputObject.TypeName) %> = new <%= method.InputObject.TypeName %>();
+	<%= format_comment_text(method.Comment) %>	async <%= method.NameLowerCamel %>(<%= camelize_down(method.InputObject.TSType) %>?: <%= method.InputObject.TSType %>, modifyHeaders?: HeadersFunc): Promise<<%= method.OutputObject.TSType %>> {
+		if (<%= camelize_down(method.InputObject.TSType) %> == null) {
+			<%= camelize_down(method.InputObject.TSType) %> = new <%= method.InputObject.TSType %>();
 		}
 		const headers: Headers = new Headers();
 		headers.set('Accept', 'application/json');
@@ -36,7 +36,7 @@ export class Client {
 		const response = await fetch(this.client.basepath + '<%= service.Name %>.<%= method.Name %>', {
 			method: 'POST',
 			headers: headers,
-			body: JSON.stringify(<%= camelize_down(method.InputObject.TypeName) %>),
+			body: JSON.stringify(<%= camelize_down(method.InputObject.TSType) %>),
 		})
 		if (response.status !== 200) {
 			throw new Error(`<%= service.Name %>.<%= method.Name %>: ${response.status} ${response.statusText}`);
@@ -45,7 +45,7 @@ export class Client {
 			if (json.error) {
 				throw new Error(json.error);
 			}
-			return new <%= method.OutputObject.TypeName %>(json);
+			return new <%= method.OutputObject.TSType %>(json);
 		})
 	}
 	<% } %>
@@ -62,11 +62,11 @@ export class Client {
 					if (data.<%= field.NameLowerCamel %>) {
 						this.<%= field.NameLowerCamel %> = []
 						for (let i = 0; i < data.<%= field.NameLowerCamel %>.length; i++) {
-							this.<%= field.NameLowerCamel %>.push(new <%= field.Type.ObjectName %>(data.<%= field.NameLowerCamel %>[i]));
+							this.<%= field.NameLowerCamel %>.push(new <%= field.Type.TSType %>(data.<%= field.NameLowerCamel %>[i]));
 						}
 					}
 				<% } else { %>
-					this.<%= field.NameLowerCamel %> = new <%= field.Type.ObjectName %>(data.<%= field.NameLowerCamel %>);
+					this.<%= field.NameLowerCamel %> = new <%= field.Type.TSType %>(data.<%= field.NameLowerCamel %>);
 				<% } %>
 			<% } else { %>
 			this.<%= field.NameLowerCamel %> = data.<%= field.NameLowerCamel %>;
@@ -75,7 +75,7 @@ export class Client {
 		}
 	}
 <%= for (field) in object.Fields { %>
-	<%= format_comment_text(field.Comment) %>	<%= field.NameLowerCamel %><%= if (field.Type.IsObject || field.Type.Multiple) { %>?<% } %>: <%= if (field.Type.IsObject) { %><%= field.Type.TypeName %><%= if (field.Type.Multiple) { %>[]<% } %><% } else { %><%= field.Type.JSType %><%= if (field.Type.Multiple) { %>[]<% } %><%= if (!field.Type.Multiple) { %> = <%= field.Type.JSType %>Default<% } %><% } %>;
+	<%= format_comment_text(field.Comment) %>	<%= field.NameLowerCamel %><%= if (field.Type.IsObject || field.Type.Multiple) { %>?<% } %>: <%= if (field.Type.IsObject) { %><%= field.Type.TSType %><%= if (field.Type.Multiple) { %>[]<% } %><% } else { %><%= field.Type.JSType %><%= if (field.Type.Multiple) { %>[]<% } %><%= if (!field.Type.Multiple) { %> = <%= field.Type.JSType %>Default<% } %><% } %>;
 <% } %>
 }
 <% } %>
