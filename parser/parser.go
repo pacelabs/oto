@@ -466,8 +466,10 @@ func (p *Parser) parseFieldType(pkg *packages.Package, obj types.Object) (FieldT
 	}
 	if named, ok := typ.(*types.Named); ok {
 		if structure, ok := named.Underlying().(*types.Struct); ok {
-			if err := p.parseObject(pkg, named.Obj(), structure); err != nil {
-				return ftype, err
+			if !isPointer {
+				if err := p.parseObject(pkg, named.Obj(), structure); err != nil {
+					return ftype, err
+				}
 			}
 			ftype.IsObject = true
 		}
