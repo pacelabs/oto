@@ -144,10 +144,11 @@ type FieldType struct {
 	ObjectName string `json:"objectName"`
 	// CleanObjectName is the ObjectName with * removed
 	// for pointer types.
-	CleanObjectName      string       `json:"cleanObjectName"`
-	ObjectNameLowerCamel string       `json:"objectNameLowerCamel"`
-	ObjectNameLowerSnake string       `json:"objectNameLowerSnake"`
-	Multiple             bool         `json:"multiple"`
+	CleanObjectName      string `json:"cleanObjectName"`
+	ObjectNameLowerCamel string `json:"objectNameLowerCamel"`
+	ObjectNameLowerSnake string `json:"objectNameLowerSnake"`
+	Multiple             bool   `json:"multiple"`
+	MultipleTimes        []struct{}
 	Package              string       `json:"package"`
 	IsObject             bool         `json:"isObject"`
 	JSType               string       `json:"jsType"`
@@ -158,9 +159,15 @@ type FieldType struct {
 }
 
 type FieldTypeMap struct {
-	Key               string
-	Element           string
-	ElementIsMultiple bool
+	KeyType           string
+	KeyTypeJS         string `json:"keyTypeJS"`
+	KeyTypeTS         string `json:"keyTypeTS"`
+	KeyTypeSwift      string `json:"keyTypeSwift"`
+	ElementType       string `json:"ElementType"`
+	ElementTypeJS     string `json:"elementTypeJS"`
+	ElementTypeTS     string `json:"elementTypeTS"`
+	ElementTypeSwift  string `json:"elementTypeSwift"`
+	ElementIsMultiple bool   `json:"elementIsMultiple"`
 }
 
 // IsOptional returns true for pointer types (optional).
@@ -450,9 +457,15 @@ func (p *Parser) parseFieldType(pkg *packages.Package, obj types.Object) (FieldT
 	}
 
 	typ := obj.Type()
-	if slice, ok := typ.(*types.Slice); ok {
+	for {
+		slice, ok := typ.(*types.Slice)
+		if !ok {
+			break
+		}
+
 		typ = slice.Elem()
 		ftype.Multiple = true
+		ftype.MultipleTimes = append(ftype.MultipleTimes, struct{}{})
 	}
 
 	originalTyp := typ
@@ -480,15 +493,69 @@ func (p *Parser) parseFieldType(pkg *packages.Package, obj types.Object) (FieldT
 		elementType := mapType.Elem()
 
 		ftype.IsMap = true
-		ftype.Map = FieldTypeMap{
-			Key:               types.TypeString(keyType, resolver),
-			Element:           types.TypeString(elementType, resolver),
-			ElementIsMultiple: false,
+
+		ftype.Map.KeyType = types.TypeString(keyType, resolver)
+		ftype.Map.KeyTypeJS = ftype.Map.KeyType
+		ftype.Map.KeyTypeSwift = ftype.Map.KeyType
+		ftype.Map.KeyTypeTS = ftype.Map.KeyType
+
+		switch ftype.Map.KeyType {
+		case "interface{}":
+			ftype.Map.KeyTypeJS = "any"
+			ftype.Map.KeyTypeSwift = "Any"
+			ftype.Map.KeyTypeTS = "object"
+		case "map[string]interface{}":
+			ftype.Map.KeyTypeJS = "object"
+			ftype.Map.KeyTypeTS = "object"
+			ftype.Map.KeyTypeSwift = "Any"
+		case "string":
+			ftype.Map.KeyTypeJS = "string"
+			ftype.Map.KeyTypeSwift = "String"
+			ftype.Map.KeyTypeTS = "string"
+		case "bool":
+			ftype.Map.KeyTypeJS = "boolean"
+			ftype.Map.KeyTypeSwift = "Bool"
+			ftype.Map.KeyTypeTS = "boolean"
+		case "int", "int16", "int32", "int64",
+			"uint", "uint16", "uint32", "uint64",
+			"float32", "float64":
+			ftype.Map.KeyTypeJS = "number"
+			ftype.Map.KeyTypeSwift = "Double"
+			ftype.Map.KeyTypeTS = "number"
 		}
 
+		ftype.Map.ElementType = types.TypeString(elementType, resolver)
 		if slice, ok := elementType.(*types.Slice); ok {
-			ftype.Map.Element = types.TypeString(slice.Elem(), resolver)
+			ftype.Map.ElementType = types.TypeString(slice.Elem(), resolver)
 			ftype.Map.ElementIsMultiple = true
+		}
+		ftype.Map.ElementTypeJS = ftype.Map.ElementType
+		ftype.Map.ElementTypeSwift = ftype.Map.ElementType
+		ftype.Map.ElementTypeTS = ftype.Map.ElementType
+
+		switch ftype.Map.ElementType {
+		case "interface{}":
+			ftype.Map.ElementTypeJS = "any"
+			ftype.Map.ElementTypeSwift = "Any"
+			ftype.Map.ElementTypeTS = "object"
+		case "map[string]interface{}":
+			ftype.Map.ElementTypeJS = "object"
+			ftype.Map.ElementTypeTS = "object"
+			ftype.Map.ElementTypeSwift = "Any"
+		case "string":
+			ftype.Map.ElementTypeJS = "string"
+			ftype.Map.ElementTypeSwift = "String"
+			ftype.Map.ElementTypeTS = "string"
+		case "bool":
+			ftype.Map.ElementTypeJS = "boolean"
+			ftype.Map.ElementTypeSwift = "Bool"
+			ftype.Map.ElementTypeTS = "boolean"
+		case "int", "int16", "int32", "int64",
+			"uint", "uint16", "uint32", "uint64",
+			"float32", "float64":
+			ftype.Map.ElementTypeJS = "number"
+			ftype.Map.ElementTypeSwift = "Double"
+			ftype.Map.ElementTypeTS = "number"
 		}
 	}
 	// disallow nested structs
@@ -502,7 +569,7 @@ func (p *Parser) parseFieldType(pkg *packages.Package, obj types.Object) (FieldT
 	ftype.ObjectNameLowerCamel = camelizeDown(ftype.ObjectName)
 	ftype.ObjectNameLowerSnake = snakeDown(ftype.ObjectName)
 	ftype.TypeID = pkgPath + "." + ftype.ObjectName
-	ftype.CleanObjectName = strings.TrimPrefix(ftype.TypeName, "*")
+	ftype.CleanObjectName = strings.TrimPrefix(types.TypeString(typ, resolver), "*")
 	ftype.TSType = ftype.CleanObjectName
 	ftype.JSType = ftype.CleanObjectName
 	ftype.SwiftType = ftype.CleanObjectName

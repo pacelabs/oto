@@ -148,7 +148,7 @@ func snakeDown(word string) string {
 
 func isAcronym(word string) bool {
 	for _, ac := range baseAcronyms {
-		if strings.ToUpper(ac) == strings.ToUpper(word) {
+		if strings.EqualFold(ac, word) {
 			return true
 		}
 	}
