@@ -124,7 +124,7 @@ You will love it.`)
 	strangeInputObj, err := def.Object(def.Services[1].Methods[0].InputObject.ObjectName)
 	is.NoErr(err)
 	is.Equal(strangeInputObj.Fields[0].Type.JSType, "any")
-	is.Equal(strangeInputObj.Fields[0].Type.TSType, "object")
+	is.Equal(strangeInputObj.Fields[0].Type.TSType, "any")
 
 	is.Equal(def.Services[2].Name, "Welcomer")
 	is.Equal(len(def.Services[2].Methods), 1)
