@@ -263,10 +263,6 @@ func (p *Parser) Parse() (Definition, error) {
 	sort.Slice(p.def.Services, func(i, j int) bool {
 		return p.def.Services[i].Name < p.def.Services[j].Name
 	})
-	// sort objects
-	sort.Slice(p.def.Objects, func(i, j int) bool {
-		return p.def.Objects[i].Name < p.def.Objects[j].Name
-	})
 	if err := p.addOutputFields(); err != nil {
 		return p.def, err
 	}
@@ -503,7 +499,7 @@ func (p *Parser) parseFieldType(pkg *packages.Package, obj types.Object) (FieldT
 		case "interface{}":
 			ftype.Map.KeyTypeJS = "any"
 			ftype.Map.KeyTypeSwift = "Any"
-			ftype.Map.KeyTypeTS = "object"
+			ftype.Map.KeyTypeTS = "any"
 		case "map[string]interface{}":
 			ftype.Map.KeyTypeJS = "object"
 			ftype.Map.KeyTypeTS = "object"
@@ -537,7 +533,7 @@ func (p *Parser) parseFieldType(pkg *packages.Package, obj types.Object) (FieldT
 		case "interface{}":
 			ftype.Map.ElementTypeJS = "any"
 			ftype.Map.ElementTypeSwift = "Any"
-			ftype.Map.ElementTypeTS = "object"
+			ftype.Map.ElementTypeTS = "any"
 		case "map[string]interface{}":
 			ftype.Map.ElementTypeJS = "object"
 			ftype.Map.ElementTypeTS = "object"
@@ -581,7 +577,7 @@ func (p *Parser) parseFieldType(pkg *packages.Package, obj types.Object) (FieldT
 		case "interface{}":
 			ftype.JSType = "any"
 			ftype.SwiftType = "Any"
-			ftype.TSType = "object"
+			ftype.TSType = "any"
 		case "map[string]interface{}":
 			ftype.JSType = "object"
 			ftype.TSType = "object"
