@@ -15,7 +15,14 @@ func (d *Definition) Example(o Object) (map[string]interface{}, error) {
 		if field.Type.IsObject {
 			subobj, err := d.Object(field.Type.CleanObjectName)
 			if err != nil {
+				if err == ErrNotFound {
+					continue
+				}
 				return nil, fmt.Errorf("Object(%q): %w", field.Type.CleanObjectName, err)
+			}
+			if subobj.Name == o.Name {
+				obj[field.NameLowerSnake] = struct{}{}
+				continue
 			}
 			example, err := d.Example(*subobj)
 			if err != nil {
@@ -31,7 +38,7 @@ func (d *Definition) Example(o Object) (map[string]interface{}, error) {
 		obj[field.NameLowerSnake] = field.Example
 		if field.Type.Multiple {
 			// turn it into an array
-			obj[field.NameLowerSnake] = []interface{}{obj[field.NameLowerSnake], obj[field.NameLowerSnake], obj[field.NameLowerSnake]}
+			obj[field.NameLowerSnake] = []interface{}{field.Example, field.Example, field.Example}
 		}
 	}
 	return obj, nil

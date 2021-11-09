@@ -413,9 +413,13 @@ func (p *Parser) parseField(pkg *packages.Package, objectName string, v *types.V
 	if !ok {
 		switch f.Type.TypeName {
 		case "interface{}":
-			example = "{}"
+			example = struct{}{}
 		case "map[string]interface{}":
-			example = "{}"
+			example = map[string]interface{}{
+				"string": "value",
+				"int":    88,
+				"object": map[string]interface{}{},
+			}
 		case "string":
 			example = "text"
 		case "bool":
@@ -430,6 +434,9 @@ func (p *Parser) parseField(pkg *packages.Package, objectName string, v *types.V
 		}
 		if f.Type.Multiple {
 			example = []interface{}{example}
+		}
+		if f.Type.IsObject && strings.HasPrefix(f.Type.TypeName, "*") {
+			example = struct{}{}
 		}
 	}
 	f.Example = example

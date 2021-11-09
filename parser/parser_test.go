@@ -177,7 +177,7 @@ You will love it.`)
 	is.Equal(welcomeInputObject.Fields[3].Type.TypeName, "*CustomerDetails")
 	is.Equal(welcomeInputObject.Fields[3].Type.JSType, "object")
 	is.Equal(welcomeInputObject.Fields[3].Type.TSType, "CustomerDetails")
-	is.Equal(welcomeInputObject.Fields[3].Example, nil)
+	is.Equal(welcomeInputObject.Fields[3].Example, struct{}{})
 	is.Equal(welcomeInputObject.Fields[3].Type.SwiftType, "CustomerDetails")
 
 	welcomeOutputObject, err := def.Object(def.Services[2].Methods[0].OutputObject.TypeName)
