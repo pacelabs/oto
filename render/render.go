@@ -5,13 +5,15 @@ import (
 	"encoding/json"
 	"go/doc"
 	"html/template"
+	"regexp"
 	"strings"
 
 	"github.com/fatih/structtag"
 	"github.com/gobuffalo/plush"
 	"github.com/markbates/inflect"
-	"github.com/meitner-se/oto/parser"
 	"github.com/pkg/errors"
+
+	"github.com/meitner-se/oto/parser"
 )
 
 var defaultRuleset = inflect.NewDefaultRuleset()
@@ -35,6 +37,7 @@ func Render(template string, def parser.Definition, params map[string]interface{
 	ctx.Set("has_suffix", strings.HasSuffix)
 	ctx.Set("to_lower", strings.ToLower)
 	ctx.Set("to_upper", strings.ToUpper)
+	ctx.Set("is_number", regexp.MustCompile("^\\d+$").MatchString)
 	s, err := plush.Render(string(template), ctx)
 	if err != nil {
 		return "", err
