@@ -61,6 +61,31 @@ func (d *Definition) ObjectIsInput(name string) bool {
 	return false
 }
 
+// MethodHasPagination checks if the object given by name, has pagination.
+// The object has pagination if it is an output object and has a field named TotalCount of the type int64.
+func (d *Definition) MethodHasPagination(method Method) bool {
+	obj, err := d.Object(method.OutputObject.TypeName)
+	if err != nil {
+		panic(err)
+	}
+
+	// Should be an output object
+	if !d.ObjectIsOutput(obj.Name) {
+		return false
+	}
+
+	for _, field := range obj.Fields {
+		// Should have a field named TotalCount of the type int64.
+		if field.Name != "TotalCount" && field.Type.CleanObjectName != "int64" {
+			continue
+		}
+
+		return true
+	}
+
+	return false
+}
+
 // ObjectIsOutput gets whether this object is a method
 // output (response) type or not.
 // Returns true if any method.OutputObject.ObjectName matches
