@@ -62,28 +62,44 @@ func (d *Definition) ObjectIsInput(name string) bool {
 }
 
 // MethodHasPagination checks if the object given by name, has pagination.
-// The object has pagination if it is an output object and has a field named TotalCount of the type int64.
+// The object has pagination if it is an output object and has a field named TotalCount of the type int64
+// and the input object has query.
 func (d *Definition) MethodHasPagination(method Method) bool {
-	obj, err := d.Object(method.OutputObject.TypeName)
+	outObj, err := d.Object(method.OutputObject.TypeName)
 	if err != nil {
 		panic(err)
 	}
 
-	// Should be an output object
-	if !d.ObjectIsOutput(obj.Name) {
+	inObj, err := d.Object(method.InputObject.TypeName)
+	if err != nil {
+		panic(err)
+	}
+
+	// Should be an output object and input object
+	if !d.ObjectIsOutput(outObj.Name) || !d.ObjectIsInput(inObj.Name) {
 		return false
 	}
 
-	for _, field := range obj.Fields {
-		// Should have a field named TotalCount of the type int64.
-		if field.Name != "TotalCount" && field.Type.CleanObjectName != "int64" {
-			continue
-		}
+	outputHasTotalCount := false
 
-		return true
+	for _, field := range outObj.Fields {
+		// Should have a field named TotalCount of the type int64.
+		if field.Name == "TotalCount" && field.Type.CleanObjectName == "int64" {
+			outputHasTotalCount = true
+			break
+		}
 	}
 
-	return false
+	inputHasQuery := false
+	for _, field := range inObj.Fields {
+		// Should have a field named TotalCount of the type int64.
+		if field.Name != "Query" {
+			inputHasQuery = true
+			break
+		}
+	}
+
+	return outputHasTotalCount && inputHasQuery
 }
 
 // ObjectIsOutput gets whether this object is a method
@@ -603,7 +619,7 @@ func (p *Parser) parseFieldType(pkg *packages.Package, obj types.Object) (FieldT
 	ftype.SwiftType = ftype.CleanObjectName
 	if ftype.IsObject {
 		ftype.JSType = "object"
-		//ftype.SwiftType = "Any"
+		// ftype.SwiftType = "Any"
 	} else {
 		switch ftype.CleanObjectName {
 		case "interface{}":
