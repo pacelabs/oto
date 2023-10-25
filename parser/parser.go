@@ -92,8 +92,8 @@ func (d *Definition) MethodHasPagination(method Method) bool {
 
 	inputHasQuery := false
 	for _, field := range inObj.Fields {
-		// Should have a field named TotalCount of the type int64.
-		if field.Name != "Query" {
+		// Should have a field named Query
+		if field.Name == "Query" {
 			inputHasQuery = true
 			break
 		}
