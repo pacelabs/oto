@@ -15,7 +15,7 @@ require (
 require (
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
-	github.com/gobuffalo/envy v1.6.5 // indirect
+	github.com/gobuffalo/envy v1.10.2 // indirect
 	github.com/gobuffalo/flect v1.0.2 // indirect
 	github.com/gobuffalo/github_flavored_markdown v1.1.4 // indirect
 	github.com/gobuffalo/helpers v0.6.7 // indirect
@@ -26,6 +26,7 @@ require (
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.22 // indirect
+	github.com/rogpeppe/go-internal v1.12.0 // indirect
 	github.com/sergi/go-diff v1.3.1 // indirect
 	github.com/sourcegraph/annotate v0.0.0-20160123013949-f4cad6c6324d // indirect
 	github.com/sourcegraph/syntaxhighlight v0.0.0-20170531221838-bd320f5d308e // indirect
