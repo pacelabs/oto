@@ -6,7 +6,9 @@ import (
 	"go/doc"
 	"html/template"
 	"regexp"
+	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/fatih/structtag"
 	"github.com/gobuffalo/plush"
@@ -38,6 +40,7 @@ func Render(template string, def parser.Definition, params map[string]interface{
 	ctx.Set("to_lower", strings.ToLower)
 	ctx.Set("to_upper", strings.ToUpper)
 	ctx.Set("is_number", regexp.MustCompile("^\\d+$").MatchString)
+	ctx.Set("is_number_prefix", func(str string) bool { return len(str) > 0 && str[0] >= '0' && str[0] <= '9' })
 	s, err := plush.Render(string(template), ctx)
 	if err != nil {
 		return "", err
@@ -105,4 +108,24 @@ func stripSuffix(s, suffix string) (string, error) {
 		return s, errors.Errorf("cannot strip suffix: %s from: %s", suffix, s)
 	}
 	return strings.TrimSuffix(s, suffix), nil
+}
+
+// isNumberPrefix checks if the prefix of the given string is a number
+func isNumberPrefix(s string, length int) bool {
+	if len(s) < length {
+		return false
+	}
+
+	prefix := s[:length]
+
+	// Check if the prefix consists entirely of digits
+	for _, r := range prefix {
+		if !unicode.IsDigit(r) {
+			return false
+		}
+	}
+
+	// Optionally, try to parse the prefix as an integer
+	_, err := strconv.Atoi(prefix)
+	return err == nil
 }
