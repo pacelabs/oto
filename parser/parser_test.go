@@ -263,3 +263,40 @@ func TestParseNestedStructs(t *testing.T) {
 	is.True(err != nil)
 	is.True(strings.Contains(err.Error(), "nested structs not supported"))
 }
+
+func TestMethodsByMetadata(t *testing.T) {
+	is := is.New(t)
+
+	service := Service{
+		Methods: []Method{
+			{
+				Name: "one",
+				Metadata: map[string]interface{}{
+					"path": "/api/v1/endpoint-2",
+				},
+			},
+			{
+				Name: "two",
+				Metadata: map[string]interface{}{
+					"path": "/api/v1/endpoint-2",
+				},
+			},
+			{
+				Name: "three",
+				Metadata: map[string]interface{}{
+					"path": "/api/v1/endpoint-1",
+				},
+			},
+		},
+	}
+	methodsByMetadata := service.MethodsByMetadata("path")
+	is.Equal(len(methodsByMetadata), 2)
+	is.Equal(methodsByMetadata[0].Metadata["path"], "/api/v1/endpoint-2")
+	is.Equal(len(methodsByMetadata[0].Methods), 1)
+	is.Equal(methodsByMetadata[0].Methods[0].Name, "three")
+	is.Equal(methodsByMetadata[1].Metadata["path"], "/api/v1/endpoint-1")
+	is.Equal(len(methodsByMetadata[1].Methods), 2)
+	is.Equal(methodsByMetadata[1].Methods[0].Name, "one")
+	is.Equal(methodsByMetadata[1].Methods[1].Name, "two")
+
+}

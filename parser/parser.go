@@ -86,16 +86,27 @@ type Service struct {
 	Metadata map[string]interface{} `json:"metadata"`
 }
 
-func (s Service) MethodsByMetadata(field string) map[string][]Method {
-	m := make(map[string][]Method)
+func (s Service) MethodsByMetadata(field string) []MethodGroup {
+	var groups []MethodGroup
+	var currentVal interface{}
 	for _, method := range s.Methods {
-		if val, ok := method.Metadata[field]; ok {
-			if valStr, ok := val.(string); ok {
-				m[valStr] = append(m[valStr], method)
-			}
+		val, ok := method.Metadata[field]
+		if !ok {
+			continue
 		}
+		if val != currentVal {
+			groups = append(groups, MethodGroup{
+				Metadata: method.Metadata,
+			})
+			currentVal = val
+		}
+		groups[len(groups)-1].Methods = append(groups[len(groups)-1].Methods, method)
 	}
-	return m
+	// sort them by the field
+	sort.Slice(groups, func(i, j int) bool {
+		return fmt.Sprintf("%v", groups[i].Metadata[field]) < fmt.Sprintf("%v", groups[j].Metadata[field])
+	})
+	return groups
 }
 
 // Method describes a method that a Service can perform.
