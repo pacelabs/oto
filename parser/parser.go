@@ -109,6 +109,14 @@ func (s Service) MethodsByMetadata(field string) []MethodGroup {
 	return groups
 }
 
+// MethodGroup is a group of methods that share the same metadata.
+type MethodGroup struct {
+	// Metadata are the metadata fields that are shared.
+	Metadata map[string]interface{}
+	// Methods are the methods that share the metadata.
+	Methods []Method
+}
+
 // Method describes a method that a Service can perform.
 type Method struct {
 	Name           string    `json:"name"`
