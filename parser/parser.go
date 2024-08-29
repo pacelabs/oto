@@ -261,7 +261,8 @@ func (p *Parser) Parse() (Definition, error) {
 				}
 				p.def.Services = append(p.def.Services, s)
 			case *types.Struct:
-				p.parseObject(pkg, obj, item)
+				// depth=1 to be consistent with parseMethod param objects
+				p.parseObject(pkg, obj, item, 1)
 			}
 		}
 	}
@@ -336,7 +337,7 @@ func (p *Parser) parseMethod(pkg *packages.Package, serviceName string, methodTy
 	if inputParams.Len() != 1 {
 		return m, p.wrapErr(errors.New("invalid method signature: expected Method(MethodRequest) MethodResponse"), pkg, methodType.Pos())
 	}
-	m.InputObject, err = p.parseFieldType(pkg, inputParams.At(0))
+	m.InputObject, err = p.parseFieldType(pkg, inputParams.At(0), 0)
 	if err != nil {
 		return m, errors.Wrap(err, "parse input object type")
 	}
@@ -344,7 +345,7 @@ func (p *Parser) parseMethod(pkg *packages.Package, serviceName string, methodTy
 	if outputParams.Len() != 1 {
 		return m, p.wrapErr(errors.New("invalid method signature: expected Method(MethodRequest) MethodResponse"), pkg, methodType.Pos())
 	}
-	m.OutputObject, err = p.parseFieldType(pkg, outputParams.At(0))
+	m.OutputObject, err = p.parseFieldType(pkg, outputParams.At(0), 0)
 	if err != nil {
 		return m, errors.Wrap(err, "parse output object type")
 	}
@@ -353,7 +354,9 @@ func (p *Parser) parseMethod(pkg *packages.Package, serviceName string, methodTy
 }
 
 // parseObject parses a struct type and adds it to the Definition.
-func (p *Parser) parseObject(pkg *packages.Package, o types.Object, v *types.Struct) error {
+//
+// depth is 0-indexed.
+func (p *Parser) parseObject(pkg *packages.Package, o types.Object, v *types.Struct, depth int) error {
 	var obj Object
 	obj.Name = o.Name()
 	obj.Comment = p.commentForType(obj.Name)
@@ -381,7 +384,7 @@ func (p *Parser) parseObject(pkg *packages.Package, o types.Object, v *types.Str
 
 	obj.Fields = []Field{}
 	for i := 0; i < st.NumFields(); i++ {
-		field, err := p.parseField(pkg, obj.Name, st.Field(i), st.Tag(i))
+		field, err := p.parseField(pkg, obj.Name, st.Field(i), st.Tag(i), depth)
 		if err != nil {
 			return err
 		}
@@ -412,7 +415,7 @@ func (p *Parser) parseTags(tag string) (map[string]FieldTag, error) {
 	return fieldTags, nil
 }
 
-func (p *Parser) parseField(pkg *packages.Package, objectName string, v *types.Var, tag string) (Field, error) {
+func (p *Parser) parseField(pkg *packages.Package, objectName string, v *types.Var, tag string, depth int) (Field, error) {
 	var f Field
 	f.Name = v.Name()
 	f.NameLowerCamel = camelizeDown(f.Name)
@@ -426,7 +429,8 @@ func (p *Parser) parseField(pkg *packages.Package, objectName string, v *types.V
 	}
 	f.Comment = p.commentForField(objectName, f.Name)
 	f.Metadata = map[string]interface{}{}
-	if !v.Exported() {
+	if depth <= 1 && !v.Exported() {
+		// request/response struct field
 		return f, p.wrapErr(errors.New(f.Name+" must be exported"), pkg, v.Pos())
 	}
 	var err error
@@ -437,14 +441,14 @@ func (p *Parser) parseField(pkg *packages.Package, objectName string, v *types.V
 	if example, ok := f.Metadata["example"]; ok {
 		f.Example = example
 	}
-	f.Type, err = p.parseFieldType(pkg, v)
+	f.Type, err = p.parseFieldType(pkg, v, depth)
 	if err != nil {
 		return f, errors.Wrap(err, "parse type")
 	}
 	return f, nil
 }
 
-func (p *Parser) parseFieldType(pkg *packages.Package, obj types.Object) (FieldType, error) {
+func (p *Parser) parseFieldType(pkg *packages.Package, obj types.Object, depth int) (FieldType, error) {
 	var ftype FieldType
 	pkgPath := pkg.PkgPath
 	resolver := func(other *types.Package) string {
@@ -474,7 +478,7 @@ func (p *Parser) parseFieldType(pkg *packages.Package, obj types.Object) (FieldT
 	}
 	if named, ok := typ.(*types.Named); ok {
 		if structure, ok := named.Underlying().(*types.Struct); ok {
-			if err := p.parseObject(pkg, named.Obj(), structure); err != nil {
+			if err := p.parseObject(pkg, named.Obj(), structure, depth+1); err != nil {
 				return ftype, err
 			}
 			ftype.IsObject = true

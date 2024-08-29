@@ -211,6 +211,27 @@ You will love it.`)
 	// log.Println(string(b))
 }
 
+func TestParseUnexportedFields(t *testing.T) {
+	t.Run("response field", func(t *testing.T) {
+		is := is.New(t)
+		patterns := []string{"./testdata/unexported-fields"}
+		p := New(patterns...)
+		p.Verbose = testing.Verbose()
+		_, err := p.Parse()
+		is.True(err != nil)
+		is.True(strings.Contains(err.Error(), "result must be exported"))
+	})
+
+	t.Run("deeper field", func(t *testing.T) {
+		is := is.New(t)
+		patterns := []string{"./testdata/unexported-deeper-fields"}
+		p := New(patterns...)
+		p.Verbose = testing.Verbose()
+		_, err := p.Parse()
+		is.NoErr(err)
+	})
+}
+
 func TestFieldTypeIsOptional(t *testing.T) {
 	is := is.New(t)
 
