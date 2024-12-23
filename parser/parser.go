@@ -8,6 +8,8 @@ import (
 	"go/doc"
 	"go/token"
 	"go/types"
+	"html/template"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"sort"
@@ -117,6 +119,295 @@ func (d *Definition) ObjectIsOutput(name string) bool {
 	return false
 }
 
+func (d *Definition) ZodEndpointSchema() template.HTML {
+	// Store the objects that has been generated
+	generated := make(map[string]struct{})
+
+	builder := &strings.Builder{}
+	builder.WriteString("import { z } from \"zod\";")
+	writeNewLines(1, builder)
+	builder.WriteString("import ZodTypes from \"./zod_types.gen\";")
+	writeNewLines(2, builder)
+
+	for _, object := range d.Objects {
+		d.writeZodEndpointSchemaObject(object.Name, builder, generated)
+	}
+
+	return template.HTML(builder.String())
+}
+
+func getTypeNameForZod(fieldType string) string {
+	if !strings.HasPrefix(fieldType, "types.") {
+		panic("invalid field type: " + fieldType)
+	}
+
+	return "ZodTypes." + strings.TrimPrefix(fieldType, "types.")
+}
+
+func removePackagePrefix(variable string) string {
+	if strings.Contains(variable, ".") {
+		variable = strings.TrimPrefix(filepath.Ext(variable), ".")
+	}
+
+	return variable
+}
+
+func getRecursiveFields(objectFields []Field, objectName string) []Field {
+	recursiveFields := make([]Field, 0)
+	for _, field := range objectFields {
+		if field.Type.IsObject && removePackagePrefix(field.Type.CleanObjectName) == objectName {
+			recursiveFields = append(recursiveFields, field)
+		}
+	}
+
+	return recursiveFields
+}
+
+func getExtendedFields(objectFields []Field) []string {
+	extendedFields := make([]string, 0)
+	for _, field := range objectFields {
+		if _, ok := field.Metadata["extend"]; ok {
+			extendedFields = append(extendedFields, camelizeDown(removePackagePrefix(field.Type.CleanObjectName))+"Schema")
+		}
+	}
+
+	return extendedFields
+}
+
+func getMergeString(extendedFields []string) string {
+	mergeString := ""
+	for _, field := range extendedFields {
+		mergeString += ".merge(" + field + ")"
+	}
+
+	return mergeString
+}
+
+func (d *Definition) writeZodEndpointSchemaObject(objectName string, builder *strings.Builder, generated map[string]struct{}) {
+	objectName = removePackagePrefix(objectName)
+
+	// Skip if it has already been generated
+	if _, ok := generated[objectName]; ok {
+		return
+	}
+
+	generated[objectName] = struct{}{}
+
+	object, err := d.Object(objectName)
+	if err != nil {
+		panic("cannot get object to generate zod endpoint schema for object " + objectName + " " + err.Error())
+	}
+
+	for _, field := range object.Fields {
+		if _, ok := field.Metadata["exclude"]; ok {
+			continue
+		}
+
+		if field.Type.IsObject {
+			d.writeZodEndpointSchemaObject(field.Type.CleanObjectName, builder, generated)
+		}
+
+		if field.Type.IsMap {
+			if _, err := d.Object(field.Type.Map.ElementType); err == nil {
+				d.writeZodEndpointSchemaObject(field.Type.Map.ElementType, builder, generated)
+			}
+		}
+	}
+
+	recursiveFields := getRecursiveFields(object.Fields, objectName)
+
+	if len(recursiveFields) > 0 {
+		fmt.Fprintf(builder, "const %sBaseSchema = ", object.NameLowerCamel)
+		d.writeZodBaseObject(object.Fields, objectName, builder)
+		builder.WriteString(";")
+		writeNewLines(2, builder)
+	}
+
+	extendedFields := getExtendedFields(object.Fields)
+
+	if len(recursiveFields) > 0 {
+		writeRecursiveType(recursiveFields, object, builder)
+		writeNewLines(2, builder)
+		writeExtendedRecursiveZodObject(recursiveFields, object.Name, builder)
+	} else {
+		fmt.Fprintf(builder, "export const %sSchema = ", camelizeDown(object.Name))
+		d.writeZodBaseObject(object.Fields, objectName, builder)
+	}
+
+	if len(extendedFields) > 0 {
+		mergeString := getMergeString(extendedFields)
+
+		fmt.Fprintf(builder, "%s", mergeString)
+	}
+
+	builder.WriteString(";")
+	writeNewLines(2, builder)
+}
+
+func writeRecursiveType(recursiveFields []Field, object *Object, builder *strings.Builder) {
+	fmt.Fprintf(builder, "type %sRecursive = z.infer<typeof %sBaseSchema> & {", object.Name, object.NameLowerCamel)
+	writeNewLines(1, builder)
+
+	for _, field := range recursiveFields {
+		builder.WriteString("\t")
+
+		builder.WriteString(field.NameLowerSnake)
+
+		if optional, ok := field.Metadata["optional"]; ok {
+			if optional.(bool) {
+				builder.WriteString("?")
+			}
+		}
+
+		builder.WriteString(": ")
+		fmt.Fprintf(builder, "%sRecursive", object.Name)
+
+		if field.Type.Multiple {
+			for i := 0; i < len(field.Type.MultipleTimes); i++ {
+				builder.WriteString("[]")
+			}
+		}
+
+		if nullable, ok := field.Metadata["nullable"]; ok {
+			if nullable.(bool) {
+				builder.WriteString(" | null")
+			}
+		}
+
+		builder.WriteString(";")
+		writeNewLines(1, builder)
+	}
+	builder.WriteString("};")
+}
+
+func writeExtendedRecursiveZodObject(fields []Field, objectName string, builder *strings.Builder) {
+	fmt.Fprintf(builder, "export const %sSchema: z.ZodType<%sRecursive> = %sBaseSchema.extend({", camelizeDown(objectName), objectName, camelizeDown(objectName))
+	for _, field := range fields {
+		writeNewLines(1, builder)
+		builder.WriteString("\t")
+		builder.WriteString(field.NameLowerSnake + ": ")
+		builder.WriteString("z.lazy(() => ")
+		builder.WriteString(camelizeDown(objectName) + "Schema")
+		builder.WriteString(")")
+		writeZodFieldModifiers(field, builder)
+		builder.WriteString(",")
+		writeNewLines(1, builder)
+	}
+
+	builder.WriteString("})")
+}
+
+func (d *Definition) writeZodBaseObject(fields []Field, objectName string, builder *strings.Builder) {
+	builder.WriteString("z.object({")
+	writeNewLines(1, builder)
+
+	for _, field := range fields {
+		// Field is excluded
+		if _, ok := field.Metadata["exclude"]; ok {
+			continue
+		}
+
+		// Field is an extended field, we handle this separately
+		if _, ok := field.Metadata["extend"]; ok {
+			continue
+		}
+
+		// Field is a recursive field, we handle this separately
+		if removePackagePrefix(field.Type.CleanObjectName) == objectName {
+			continue
+		}
+
+		builder.WriteString("\t")
+		builder.WriteString(field.NameLowerSnake + ": ")
+
+		switch {
+		case field.Type.IsObject:
+			writeZodObject(field, builder)
+		case field.Type.IsMap:
+			d.writeZodRecord(field, builder)
+		case field.Metadata["options"] != nil:
+			writeZodEnum(field, builder)
+		default:
+			if customTypeName, ok := field.Metadata["type"].(string); ok {
+				builder.WriteString(getTypeNameForZod(customTypeName))
+			} else {
+				builder.WriteString("z." + field.Type.JSType + "()")
+			}
+		}
+
+		writeZodFieldModifiers(field, builder)
+
+		if removePackagePrefix(field.Type.CleanObjectName) == objectName {
+			builder.WriteString(")")
+		}
+
+		builder.WriteString(",")
+		writeNewLines(1, builder)
+	}
+
+	builder.WriteString("})")
+}
+
+func writeZodObject(field Field, builder *strings.Builder) {
+	builder.WriteString(camelizeDown(removePackagePrefix(field.Type.CleanObjectName)) + "Schema")
+}
+
+func (d *Definition) writeZodRecord(field Field, builder *strings.Builder) {
+	builder.WriteString("z.record(")
+	builder.WriteString("z." + field.Type.Map.KeyTypeTS + "(), ")
+
+	_, err := d.Object(field.Type.Map.ElementType)
+	if err == nil {
+		builder.WriteString(camelizeDown(field.Type.Map.ElementType) + "Schema")
+	} else {
+		builder.WriteString("z." + field.Type.Map.ElementTypeTS + "()")
+	}
+
+	if field.Type.Map.ElementIsMultiple {
+		builder.WriteString(".array()")
+	}
+
+	builder.WriteString(")")
+}
+
+func writeZodEnum(field Field, builder *strings.Builder) {
+	options := make([]string, 0, len(field.Metadata["options"].([]interface{})))
+
+	for _, option := range field.Metadata["options"].([]interface{}) {
+		if s, ok := option.(string); ok {
+			options = append(options, "\""+s+"\"")
+		}
+	}
+
+	builder.WriteString("z.enum([" + strings.Join(options, ", ") + "])")
+}
+
+func writeNewLines(count int, builder *strings.Builder) {
+	for i := 0; i < count; i++ {
+		builder.WriteString("\n")
+	}
+}
+
+func writeZodFieldModifiers(field Field, builder *strings.Builder) {
+	if field.Type.Multiple {
+		for i := 0; i < len(field.Type.MultipleTimes); i++ {
+			builder.WriteString(".array()")
+		}
+	}
+
+	if nullable, ok := field.Metadata["nullable"]; ok {
+		if nullable.(bool) {
+			builder.WriteString(".nullable()")
+		}
+	}
+
+	if optional, ok := field.Metadata["optional"]; ok {
+		if optional.(bool) {
+			builder.WriteString(".optional()")
+		}
+	}
+}
+
 // Service describes a service, akin to an interface in Go.
 type Service struct {
 	Name    string   `json:"name"`
@@ -142,11 +433,13 @@ type Method struct {
 
 // Object describes a data structure that is part of this definition.
 type Object struct {
-	TypeID   string  `json:"typeID"`
-	Name     string  `json:"name"`
-	Imported bool    `json:"imported"`
-	Fields   []Field `json:"fields"`
-	Comment  string  `json:"comment"`
+	TypeID         string  `json:"typeID"`
+	Name           string  `json:"name"`
+	NameLowerCamel string  `json:"nameLowerCamel"`
+	NameLowerSnake string  `json:"nameLowerSnake"`
+	Imported       bool    `json:"imported"`
+	Fields         []Field `json:"fields"`
+	Comment        string  `json:"comment"`
 	// Metadata are typed key/value pairs extracted from the
 	// comments.
 	Metadata map[string]interface{} `json:"metadata"`
@@ -370,6 +663,8 @@ func (p *Parser) parseMethod(pkg *packages.Package, serviceName string, methodTy
 func (p *Parser) parseObject(pkg *packages.Package, o types.Object, v *types.Struct) error {
 	var obj Object
 	obj.Name = o.Name()
+	obj.NameLowerCamel = camelizeDown(obj.Name)
+	obj.NameLowerSnake = snakeDown(obj.Name)
 	obj.Comment = p.commentForType(obj.Name)
 	var err error
 	obj.Metadata, obj.Comment, err = p.extractCommentMetadata(obj.Comment)
@@ -782,7 +1077,7 @@ var metadataCommentRegex = regexp.MustCompile(`^.*: .*`)
 // Metadata fields should succeed the comment string.
 func (p *Parser) extractCommentMetadata(comment string) (map[string]interface{}, string, error) {
 	var lines []string
-	var metadata = make(map[string]interface{})
+	metadata := make(map[string]interface{})
 	s := bufio.NewScanner(strings.NewReader(comment))
 	for s.Scan() {
 		line := strings.TrimSpace(s.Text())
