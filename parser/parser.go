@@ -124,8 +124,6 @@ func (d *Definition) ZodEndpointSchema() template.HTML {
 	generated := make(map[string]struct{})
 
 	builder := &strings.Builder{}
-	builder.WriteString("import { z } from \"zod\";")
-	writeNewLines(1, builder)
 	builder.WriteString("import ZodTypes from \"./zod_types.gen\";")
 	writeNewLines(2, builder)
 
